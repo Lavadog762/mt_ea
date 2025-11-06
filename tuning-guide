@@ -1,0 +1,31 @@
+Guidelines for Tuning
+
+Step
+
+Higher Step → faster backtest, fewer comparisons
+
+Lower Step → more precise pattern matching, higher CPU load
+
+BarsPerPattern
+
+Shorter patterns → lighter computation, faster response
+
+Longer patterns → captures more complex trends, slightly slower
+
+HistoryLimit
+
+Limit the number of historical bars compared to avoid unnecessary CPU load
+
+For intraday (M1–M5) → 500–1000 bars
+
+For longer timeframes (H1–D1) → 200–1000 bars depending on dataset
+
+CPU Load Estimation
+
+Approx. 20k–40k operations per tick is light for modern CPUs
+
+200k ops/tick may cause lag in MT4/MT5, especially on M1 tick data
+
+Visualization
+
+Pattern lines redraw only once per new bar, so higher Step doesn’t affect chart performance
