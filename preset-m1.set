@@ -1,8 +1,8 @@
-BarsPerPattern=30
+BarsPerPattern=35
 SimilarityThreshold=0.9
 LookAheadBars=20
-Step=10
-HistoryLimit=500
+Step=5
+HistoryLimit=1000
 RiskPerTrade=0.01
 MaxDailyLoss=0.02
 MaxExposurePercent=0.04
