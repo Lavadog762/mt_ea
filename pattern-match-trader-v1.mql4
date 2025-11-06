@@ -1,9 +1,8 @@
-//+------------------------------------------------------------------+
-//| PatternMatchTrader_v1.mq4 / .mq5                                 |
-//| Dual-compatible MT4 / MT5 EA                                     |
-//| Pattern leading, MA + RSI confirming, chart visualization        |
-//| Risk management, trailing stops, logging, intraday hours         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------+
+//| PatternMatchTrader_v15_multi.mq4 / .mq5                            |
+//| Dual-compatible MT4 / MT5 EA                                       |
+//| Multi-trade exposure <=4%, Pattern leading + MA + RSI confirmation |
+//+--------------------------------------------------------------------+
 #property strict
 
 #ifdef __MQL5__
@@ -20,6 +19,7 @@ input int HistoryLimit = 1000;
 
 input double RiskPerTrade = 0.01;
 input double MaxDailyLoss = 0.02;
+input double MaxExposurePercent = 0.04; // 4% of account balance
 input double RiskRewardRatio = 2.0;
 input double TrailingStopPercent = 0.5;
 
@@ -46,13 +46,40 @@ int dailyTrades = 0;
 datetime lastBarTime = 0;
 
 //+------------------------------------------------------------------+
+// Calculate total current exposure
+double TotalExposure()
+{
+   double total = 0;
+#ifdef __MQL4__
+   for(int i=0;i<OrdersTotal();i++)
+   {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
+         total += OrderLots() * MarketInfo(Symbol(),MODE_TICKVALUE) * Point;
+   }
+#else
+   for(int i=0;i<PositionsTotal();i++)
+   {
+      if(PositionSelectByIndex(i))
+      {
+         if(PositionGetString(POSITION_SYMBOL)==_Symbol)
+         {
+            double lots = PositionGetDouble(POSITION_VOLUME);
+            total += lots * SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
+         }
+      }
+   }
+#endif
+   return(total);
+}
+
+//+------------------------------------------------------------------+
 // Pattern similarity
 double PatternSimilarity(const double &a[], const double &b[], int len)
 {
-   double sumA=0, sumB=0;
+   double sumA=0,sumB=0;
    for(int i=0;i<len;i++){ sumA+=a[i]; sumB+=b[i]; }
    double meanA=sumA/len, meanB=sumB/len;
-   double num=0, denA=0, denB=0;
+   double num=0,denA=0,denB=0;
    for(int i=0;i<len;i++)
    {
       double da=a[i]-meanA;
@@ -62,11 +89,11 @@ double PatternSimilarity(const double &a[], const double &b[], int len)
       denB+=db*db;
    }
    if(denA==0 || denB==0) return(0);
-   return(num/MathSqrt(denA*denA*denB*denB + 1e-12)); // safe guard divide by zero
+   return(num/MathSqrt(denA*denA*denB*denB + 1e-12));
 }
 
 //+------------------------------------------------------------------+
-// Daily reset
+// Reset daily stats
 void ResetDailyStats()
 {
    startOfDayBalance = AccountBalance();
@@ -78,16 +105,15 @@ void ResetDailyStats()
 }
 
 //+------------------------------------------------------------------+
-// In trading window?
+// Check if in trading window
 bool InTradingWindow()
 {
    datetime now = TimeCurrent();
    int brokerHour = TimeHour(now);
    int brokerMinute = TimeMinute(now);
    int brokerWeekday = TimeDayOfWeek(now);
-   int estHour = brokerHour - (GmtOffset + 5);
+   int estHour = brokerHour - (GmtOffset+5);
    if(estHour<0) estHour+=24;
-
    if(brokerWeekday<1 || brokerWeekday>5) return false;
    if(estHour>=StartHourEST && estHour<EndHourEST)
       if(!(estHour==EndHourEST-1 && brokerMinute>=60-PreCloseBufferMinutes)) return true;
@@ -137,18 +163,21 @@ void CloseAllTrades(string reason="Time/Drawdown Closure")
    int total=PositionsTotal();
    for(int i=total-1;i>=0;i--)
    {
-      string sym=PositionGetSymbol(i);
-      if(sym==_Symbol)
+      if(PositionSelectByIndex(i))
       {
-         ulong ticket=PositionGetTicket(i);
-         double lots=PositionGetDouble(POSITION_VOLUME);
-         double entry=PositionGetDouble(POSITION_PRICE_OPEN);
-         int type=(int)PositionGetInteger(POSITION_TYPE);
-         if(trade.PositionClose(sym))
+         string sym=PositionGetString(POSITION_SYMBOL);
+         if(sym==_Symbol)
          {
-            double profit=(type==POSITION_TYPE_BUY)?(SymbolInfoDouble(_Symbol,SYMBOL_BID)-entry)*lots*SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE)
-                                                 :(entry-SymbolInfoDouble(_Symbol,SYMBOL_ASK))*lots*SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
-            LogTrade(reason,type,lots,entry,0,profit);
+            ulong ticket=PositionGetTicket(i);
+            double lots=PositionGetDouble(POSITION_VOLUME);
+            double entry=PositionGetDouble(POSITION_PRICE_OPEN);
+            int type=(int)PositionGetInteger(POSITION_TYPE);
+            if(trade.PositionClose(sym))
+            {
+               double profit=(type==POSITION_TYPE_BUY)?(SymbolInfoDouble(_Symbol,SYMBOL_BID)-entry)*lots*SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE)
+                                                    :(entry-SymbolInfoDouble(_Symbol,SYMBOL_ASK))*lots*SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
+               LogTrade(reason,type,lots,entry,0,profit);
+            }
          }
       }
    }
@@ -286,11 +315,17 @@ void OnTick()
    int rsiDir=0; if(rsi>RSI_BuyLevel) rsiDir=1; else if(rsi<RSI_SellLevel) rsiDir=-1;
    if(rsiDir==0 || patternDir!=maDir || patternDir!=rsiDir) return;
 
+   // --- Multi-trade exposure check
+   double maxExposure = AccountBalance() * MaxExposurePercent;
+   double currentExposure = TotalExposure();
+
    // --- Trade sizing
    double equity=AccountEquity();
    double slPoints=(equity*RiskPerTrade/MarketInfo(Symbol(),MODE_TICKVALUE))/Point;
    double tpPoints=slPoints*RiskRewardRatio;
    double lotSize=NormalizeDouble(RiskPerTrade*equity/slPoints/MarketInfo(Symbol(),MODE_TICKVALUE),2);
+
+   if(currentExposure + lotSize * MarketInfo(Symbol(),MODE_TICKVALUE) * Point > maxExposure) return;
 
 #ifdef __MQL4__
    int ticket=-1;
