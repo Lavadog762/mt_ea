@@ -5,6 +5,7 @@ Step=10
 HistoryLimit=500
 RiskPerTrade=0.01
 MaxDailyLoss=0.02
+MaxExposurePercent=0.04
 RiskRewardRatio=2.0
 TrailingStopPercent=0.5
 MA_Period=50
