@@ -1,0 +1,9 @@
+| Timeframe | BarsPerPattern | Step | HistoryLimit (bars) | Approx. Ops per Tick | Notes / Tips                                               |
+| --------- | -------------- | ---- | ------------------- | -------------------- | ---------------------------------------------------------- |
+| M1        | 30–35          | 5–10 | 500–1000            | 20k–40k              | Use smaller HistoryLimit for long tick history (>6 months) |
+| M5        | 35             | 5    | 1000                | 20k                  | Optimal for intraday backtests, balances accuracy & speed  |
+| M15       | 35–40          | 5    | 1000                | 20k–25k              | Slightly larger BarsPerPattern okay for slower bars        |
+| M30       | 40             | 5    | 1000                | 20k–25k              | Smooth performance, pattern matches still effective        |
+| H1        | 40–50          | 5    | 1000                | 20k–30k              | Longer-term patterns, less frequent updates                |
+| H4        | 50             | 5    | 500–1000            | 20k–25k              | Good for swing trades, can reduce HistoryLimit for speed   |
+| D1        | 50             | 1–2  | 200–500             | 5k–10k               | Daily chart, fewer bars, keep Step small for accuracy      |
