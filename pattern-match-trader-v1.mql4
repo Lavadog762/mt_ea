@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| PatternMatchTrader_v16_MT4.mq4                                   |
+//| PatternMatchTrader_v1_MT4.mq4                                   |
 //| Optimized MT4 EA with multi-trade, pattern leading + MA + RSI    |
 //+------------------------------------------------------------------+
 #property strict
